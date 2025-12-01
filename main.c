@@ -48,7 +48,7 @@ int main() {
         if (strcmp(input_buffer, "done") == 0) {
             break;
         }
-
+		
 		//Grow the hunter array dynamically
         if (house.hunter_count >= hunter_capacity) {
             hunter_capacity = (hunter_capacity == 0) ? 1 : hunter_capacity * 2;

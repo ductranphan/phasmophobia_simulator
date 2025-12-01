@@ -97,7 +97,7 @@ struct RoomNode {
     struct RoomNode* next;
 };
 
-struct RoomStack {
+struct RoomStack {  //Linkedlist, mainly for hunter to retrace their steps when they want to go back to van
     struct RoomNode* head;
     int count;
 };
@@ -107,10 +107,10 @@ struct RoomStack {
 struct Ghost {
     int id;
     enum GhostType type;   //type of ghost 
-    struct Room* current_room;
-    int boredom;
-    bool running;
-    pthread_t thread;
+    struct Room* current_room;    //location of ghost
+    int boredom;    //boredom counter
+    bool running;     
+    pthread_t thread;    //the actual brain (thread)
 };
 
 struct Hunter {
@@ -118,11 +118,11 @@ struct Hunter {
     int id;
 
     struct Room* current_room;
-    struct CaseFile* shared_casefile;
-    struct RoomStack breadcrumb_stack;
+    struct CaseFile* shared_casefile;    //pointer to their shared infos
+    struct RoomStack breadcrumb_stack;    //path back home
 
-    enum EvidenceType device;
-    int fear;
+    enum EvidenceType device;   //the tool hunter is holding
+    int fear;        
     int boredom; 
     
     enum LogReason exit_reason;
@@ -134,9 +134,9 @@ struct Hunter {
 struct House {
     struct Room rooms[MAX_ROOMS];
     int room_count;
-    struct Room* starting_room;
+    struct Room* starting_room;   //pointer to the starting room
 
-    struct Hunter* hunters;
+    struct Hunter* hunters;          
     int hunter_count;
     
     struct CaseFile casefile;

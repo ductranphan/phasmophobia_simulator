@@ -48,7 +48,15 @@ int main() {
         if (strcmp(input_buffer, "done") == 0) {
             break;
         }
-
+		 
+		char hunter_name[MAX_HUNTER_NAME];
+		strncpy(hunter_name, input_buffer, MAX_HUNTER_NAME);
+		
+		//HUNTER ID
+        printf("Hunter ID: ");
+        if (!fgets(input_buffer, sizeof(input_buffer), stdin)) break;
+        int hunter_id = atoi(input_buffer);	
+		
 		//Grow the hunter array dynamically
         if (house.hunter_count >= hunter_capacity) {
             hunter_capacity = (hunter_capacity == 0) ? 1 : hunter_capacity * 2;
@@ -67,8 +75,8 @@ int main() {
 
 		//Intialize the hunter
         hunter_init(&house.hunters[house.hunter_count], 
-                    100 + house.hunter_count, 
-                    input_buffer, 
+                    hunter_id,
+                    hunter_name, 
                     house.starting_room, 
                     start_device, 
                     &house.casefile);
@@ -77,7 +85,7 @@ int main() {
     }
 
     if (house.hunter_count == 0) {
-        printf("No hunters? The ghost wins by default!\n");
+        printf("No hunters. The ghost wins!\n");
         house_cleanup(&house);
         return 0;
     }
@@ -120,7 +128,7 @@ int main() {
         hunter_cleanup(h); 
     }
 
-    printf("\nCollected Evidence: ");
+    printf("\nEvidence Collected: ");
     const enum EvidenceType* ev_list;
     int ev_count = get_all_evidence_types(&ev_list);
     for (int i = 0; i < ev_count; i++) {
