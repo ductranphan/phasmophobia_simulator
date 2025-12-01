@@ -1,0 +1,299 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <unistd.h>
+#include "defs.h"
+#include "helpers.h"
+
+/*
+    hunter.c
+*/
+
+bool evidence_has_three_unique(EvidenceByte mask) {
+    int count = 0;
+    for (int i = 0; i < 8; i++) {
+        if ((mask >> i) & 1) {
+            count++;
+        }
+    }
+    return count >= 3;
+}
+
+
+//declare stacl for hunter to remember their path when they wanna go back to the van
+void stack_init(struct RoomStack* stack) {
+    stack->head = NULL;
+    stack->count = 0;
+}
+
+//everytime hunter enters new room, drop breadcrumb to retrace
+void stack_push(struct RoomStack* stack, struct Room* room) {
+    struct RoomNode* node = malloc(sizeof(struct RoomNode));
+    if (!node) exit(1);
+    node->room = room;
+    node->next = stack->head;
+    stack->head = node;
+    stack->count++;
+}
+
+//follow breadcrums to go back
+struct Room* stack_pop(struct RoomStack* stack) {
+    if (stack->head == NULL) return NULL;
+    struct RoomNode* node = stack->head;
+    struct Room* room = node->room;
+    stack->head = node->next;
+    free(node);
+    stack->count--;
+    return room;
+}
+
+void stack_clean(struct RoomStack* stack) {
+    while (stack->head != NULL) {
+        stack_pop(stack);
+    }
+}
+
+//Intialzie
+void hunter_init(struct Hunter* hunter, int id, const char* name, struct Room* start_room, enum EvidenceType device, struct CaseFile* casefile) {
+    hunter->id = id;
+    snprintf(hunter->name, MAX_HUNTER_NAME, "%s", name);
+    hunter->current_room = start_room;
+    hunter->shared_casefile = casefile;
+    hunter->device = device; 
+    hunter->fear = 0;
+    hunter->boredom = 0;
+    hunter->exit_reason = LR_UNKNOWN;
+    hunter->running = true;
+    
+    stack_init(&hunter->breadcrumb_stack);   
+    
+    //lock for other threads to check room
+    sem_wait(&start_room->mutex);
+    
+    //check room for number of hunters
+    if (start_room->hunter_count < MAX_ROOM_OCCUPANCY) {
+        start_room->hunters[start_room->hunter_count++] = hunter;
+    }
+    
+    //UNLOCK 
+    sem_post(&start_room->mutex);
+
+    log_hunter_init(id, start_room->name, name, device);
+}
+
+//clean
+void hunter_cleanup(struct Hunter* hunter) {
+    stack_clean(&hunter->breadcrumb_stack);
+}
+
+//check evidence and log into shared evidence files
+void register_evidence(struct Hunter* hunter, enum EvidenceType evidence) {
+    struct CaseFile* cf = hunter->shared_casefile;
+    sem_wait(&cf->mutex);
+    if (!(cf->collected & evidence)) {
+        cf->collected |= evidence;
+        if (evidence_has_three_unique(cf->collected)) {
+            cf->solved = true;
+        }
+    }
+    sem_post(&cf->mutex);
+}
+
+//hunter change devices
+enum EvidenceType pick_new_device(enum EvidenceType current) {
+    const enum EvidenceType* list;
+    int count = get_all_evidence_types(&list);
+    enum EvidenceType new_device = current;
+    while (new_device == current) {
+        int idx = rand_int_threadsafe(0, count);
+        new_device = list[idx];
+    }
+    return new_device;
+}
+
+//handle the move of hunter from a room to another, return true if move actually happened
+bool move_hunter_entity(struct Hunter* hunter, struct Room* next_room) {
+    struct Room* curr = hunter->current_room;
+    
+    struct Room* first = (curr < next_room) ? curr : next_room;
+    struct Room* second = (curr < next_room) ? next_room : curr;
+    
+    sem_wait(&first->mutex);
+    sem_wait(&second->mutex);
+    
+    if (next_room->hunter_count >= MAX_ROOM_OCCUPANCY) {
+        sem_post(&second->mutex);
+        sem_post(&first->mutex);
+        return false;
+    }
+    
+    for (int i = 0; i < curr->hunter_count; i++) {
+        if (curr->hunters[i] == hunter) {
+            curr->hunters[i] = curr->hunters[curr->hunter_count - 1];
+            curr->hunters[curr->hunter_count - 1] = NULL;
+            curr->hunter_count--;
+            break;
+        }
+    }
+    
+    next_room->hunters[next_room->hunter_count++] = hunter;
+    hunter->current_room = next_room;
+    
+    sem_post(&second->mutex);
+    sem_post(&first->mutex);
+    
+    log_move(hunter->id, hunter->boredom, hunter->fear, curr->name, next_room->name, hunter->device);
+    return true;
+}
+
+//hunter life's thread
+void* hunter_thread(void* arg) {
+    struct Hunter* hunter = (struct Hunter*)arg;    
+    bool return_to_van = false;        
+
+	//loop for hunter running
+    while (hunter->running) {
+        struct Room* room = hunter->current_room;
+        
+    
+        sem_wait(&room->mutex);
+        bool ghost_here = (room->ghost != NULL);  //check if ghost here
+        sem_post(&room->mutex);
+        
+        //if ghost is here then do its thing to the hunter
+        if (ghost_here) {
+            hunter->fear++;
+            hunter->boredom = 0;
+        //if not then get bored
+        } else {
+            hunter->boredom++;
+        }
+        
+        //if the hunter reach scared or boredom max level
+        if (hunter->fear >= HUNTER_FEAR_MAX || hunter->boredom >= ENTITY_BOREDOM_MAX) {
+            hunter->exit_reason = (hunter->fear >= HUNTER_FEAR_MAX) ? LR_AFRAID : LR_BORED;
+            hunter->running = false;
+            
+            sem_wait(&room->mutex);
+            
+            //clear the hunter off the room 
+            for(int i=0; i<room->hunter_count; i++) {
+                if(room->hunters[i] == hunter) {
+                    room->hunters[i] = room->hunters[room->hunter_count-1];
+                    room->hunters[room->hunter_count-1] = NULL;
+                    room->hunter_count--; 
+                    break;
+                }
+            }
+            sem_post(&room->mutex);
+            log_exit(hunter->id, hunter->boredom, hunter->fear, room->name, hunter->device, hunter->exit_reason);
+            pthread_exit(NULL);
+        }
+
+		// if hunter is in van 
+        if (room->is_exit) { 
+            if (hunter->breadcrumb_stack.count > 0) {
+                stack_clean(&hunter->breadcrumb_stack);   //clean the breadcrumbs
+                return_to_van = false;
+                log_return_to_van(hunter->id, hunter->boredom, hunter->fear, room->name, hunter->device, false);
+            }
+            
+            sem_wait(&hunter->shared_casefile->mutex);
+            
+            //check if they have enough evidence to solved or not
+            if (hunter->shared_casefile->solved) {
+                sem_post(&hunter->shared_casefile->mutex);
+                hunter->exit_reason = LR_EVIDENCE;      //if enough then logs into LR_EVIDENCE and quit
+                hunter->running = false;
+                sem_wait(&room->mutex);
+                
+                for(int i=0; i<room->hunter_count; i++) {
+                    if(room->hunters[i] == hunter) {
+                        room->hunters[i] = room->hunters[room->hunter_count-1];
+                        room->hunters[room->hunter_count-1] = NULL;
+                        room->hunter_count--; 
+                        break;
+                    }
+                }
+                
+                sem_post(&room->mutex);
+                
+                
+                log_exit(hunter->id, hunter->boredom, hunter->fear, room->name, hunter->device, LR_EVIDENCE);
+                pthread_exit(NULL);
+            }
+            sem_post(&hunter->shared_casefile->mutex);
+            
+            //swap device
+            enum EvidenceType old_device = hunter->device;
+            hunter->device = pick_new_device(old_device);
+            log_swap(hunter->id, hunter->boredom, hunter->fear, old_device, hunter->device);
+            return_to_van = false;
+        }
+        
+
+        else {
+            sem_wait(&room->mutex);
+            
+            //check the evidence and device compatibility
+            if ((room->evidence & hunter->device) == hunter->device) {
+                room->evidence &= ~hunter->device;
+                sem_post(&room->mutex); 
+                log_evidence(hunter->id, hunter->boredom, hunter->fear, room->name, hunter->device);
+                register_evidence(hunter, hunter->device);
+                
+                //when evidence found, run back to van and swap tools
+                if (!return_to_van) {
+                    return_to_van = true;
+                    log_return_to_van(hunter->id, hunter->boredom, hunter->fear, room->name, hunter->device, true);
+                }
+                
+            //random chance (20%) of hunter didnt find anything in a room and returning to the van to switch device 
+            } else {
+                sem_post(&room->mutex);
+                if (!return_to_van){
+                	int dice = rand_int_threadsafe(0,100);
+                	
+                	if (dice <= 20){
+                		return_to_van = true;
+                    	log_return_to_van(hunter->id, hunter->boredom, hunter->fear, room->name, hunter->device, true);
+                	}
+                }
+            }
+        }
+        
+
+        struct Room* next_room = NULL;
+        
+        //back to starting room
+        if (return_to_van) {
+            next_room = stack_pop(&hunter->breadcrumb_stack);
+            
+        } 
+        
+        // explore rooms
+        else {
+            sem_wait(&room->mutex);
+            if (room->connection_count > 0) {
+                int idx = rand_int_threadsafe(0, room->connection_count);
+                next_room = room->connections[idx];
+            }
+            sem_post(&room->mutex);
+        }
+
+        if (next_room) {
+            bool success = move_hunter_entity(hunter, next_room);
+            if (success) {
+                 if (!return_to_van) {
+                     stack_push(&hunter->breadcrumb_stack, room);
+                 }
+            } else {
+                if (return_to_van) {
+                    stack_push(&hunter->breadcrumb_stack, next_room); 
+                }
+            }
+        }
+        usleep(100 * 100); 
+    }
+    return NULL;
+}

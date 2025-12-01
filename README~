@@ -1,0 +1,95 @@
+Project: Ghost Hunting Simulation
+Course: COMP 2401 - Introduction to Systems Programming
+Student Name: Duc Tran Phan
+Student ID:   101335556
+Date:         November 29, 2025
+
+To build the project, navigate to the project directory in the terminal and run:
+make
+
+This will compile all source files and link them into an executable named 'simulation'.
+
+To run the simulation:
+	./simulation
+
+To clean up compiled object files and the executable:
+	make clean
+
+The program will prompt you to enter names for the hunters.
+
+	Enter a name and press Enter.
+
+Type "done" and press Enter to start the simulation.
+
+The simulation supports up to 4 hunters.
+
+1. FILE DESCRIPTION:
+
+defs.h:
+Contains all the common definitions, constants (e.g., MAX_HUNTERS), and
+data structures (Ghost, Hunter, Room, House) used across the project.
+It serves as the central header file for the simulation's data types.
+
+main.c:
+The entry point of the program. It handles:
+1. Initializing the House and populating rooms.
+2. Getting user input for Hunter names.
+3. Spawning the Ghost thread and Hunter threads.
+4. Waiting for threads to join (synchronization).
+5. Printing the final results (winner, evidence collected, ghost type).
+
+ghost.c:
+Contains the logic for the Ghost thread.
+- Determines behavior based on boredom and presence of hunters.
+- Handles movement between rooms using semaphore synchronization to prevent
+deadlocks (locking order based on memory address).
+- Randomly drops evidence specific to the Ghost's type.
+
+hunter.c:
+Contains the logic for the Hunter threads.
+- Manages the "breadcrumb Stack" (Linked List) for navigation back to the Van.
+- Specific evidence detection using bitwise operations.
+- Updates the shared CaseFile when evidence is found.
+- Handles fear and boredom and equipment swapping.
+
+house.c:
+Responsible for the management of the House structure.
+- Initializes rooms and their semaphores.
+- Connects rooms to form the map graph.
+- Cleans up (frees) all allocated memory and destroys semaphores upon exit.
+
+helpers.c / helpers.h:
+Provided utility functions for logging events (movement, evidence, exits)
+in a standardized CSV format for validation. (Not modified).
+
+Makefile:
+The build script. It defines the compiler (gcc), flags (-W -Wall -pthread),
+to compile the project efficiently.
+
+2. IMPLEMENTATION:
+
+Implemented deadlock prevention using address-based locking order
+in both Ghost and Hunter movement logic.
+
+Implemented a dynamic linked list for the Hunter's pathfinding (Breadcrumb
+stack) to allow for unlimited exploration depth.
+
+3. SOURCES AND COLLABORATIONS
+
+Collaborators (Discussions only):
+- Ocean Yu: Discussed the logic for semaphore locking order to
+prevent deadlocks
+
+Resources Used:
+- Course Lectures (Threads and Synchronization)
+- COMP 2401 Note Snippets regarding Linked Lists.
+- Main materials for sem_wait, sem_post, and pthread_create.
+
+4. ASSUMPTION:
+
+- Chance of switching: When the hunter is in the room with no evidence and 
+the level of boredom increases, hunter will have a small random chance of
+going back to van an switch device. I assume that chance will be 20% for
+the hunter to do so. 
+
+- 
