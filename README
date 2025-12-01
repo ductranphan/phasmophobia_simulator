@@ -92,8 +92,8 @@ the level of boredom increases, hunter will have a small random chance of
 going back to van an switch device. I assume that chance will be 20% for
 the hunter to do so. 
  
-- Max ammount of hunters allowed is 8
+- Max ammount of hunters allowed is 4 since in the context, the project 
+says "4 hunters"
 
-- Hunter ID is automatically defined from 0 to 8 as I add it to avoid having 
-bugs in terms like hunters having the same ID or typing "done" in ID field,
-as I want to focus on the main logic of the project rather than the minor problems
+- Having the same number of hunter ID doesn't matter and if you type an 
+invalid value then it automatically sets to 0

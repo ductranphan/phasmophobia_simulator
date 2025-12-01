@@ -48,6 +48,16 @@ int main() {
         if (strcmp(input_buffer, "done") == 0) {
             break;
         }
+        
+        char hunter_name[MAX_HUNTER_NAME];
+        strncpy(hunter_name, input_buffer, MAX_HUNTER_NAME);
+        
+        printf("Hunter ID: ");
+        if (!fgets(input_buffer, sizeof(input_buffer), stdin)){
+        	break;
+        }
+        
+        int hunter_id = atoi(input_buffer);
 		
 		//Grow the hunter array dynamically
         if (house.hunter_count >= hunter_capacity) {
@@ -67,8 +77,8 @@ int main() {
 
 		//Intialize the hunter
         hunter_init(&house.hunters[house.hunter_count], 
-                    100 + house.hunter_count, 
-                    input_buffer, 
+                    hunter_id, 
+                    hunter_name, 
                     house.starting_room, 
                     start_device, 
                     &house.casefile);
