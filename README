@@ -42,7 +42,7 @@ ghost.c:
 Contains the logic for the Ghost thread.
 - Determines behavior based on boredom and presence of hunters.
 - Handles movement between rooms using semaphore synchronization to prevent
-deadlocks (locking order based on memory address).
+deadlocks (locking order based on lower memory address).
 - Randomly drops evidence specific to the Ghost's type.
 
 hunter.c:
