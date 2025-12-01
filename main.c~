@@ -37,7 +37,7 @@ int main() {
 
 	//Loop will stop if we reach MAX_HUNTERS
     while (house.hunter_count < MAX_HUNTER) {
-        printf("Hunter Name: ");
+        printf("Hunter Name ('done' to quit): ");
         if (!fgets(input_buffer, sizeof(input_buffer), stdin)) {
         	break;
         }
@@ -77,8 +77,8 @@ int main() {
 
 		//Intialize the hunter
         hunter_init(&house.hunters[house.hunter_count], 
-                    100 + house.hunter_count, 
-                    input_buffer, 
+                    hunter_id, 
+                    hunter_name, 
                     house.starting_room, 
                     start_device, 
                     &house.casefile);

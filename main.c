@@ -37,7 +37,7 @@ int main() {
 
 	//Loop will stop if we reach MAX_HUNTERS
     while (house.hunter_count < MAX_HUNTER) {
-        printf("Hunter Name: ");
+        printf("Hunter Name ('done' to quit): ");
         if (!fgets(input_buffer, sizeof(input_buffer), stdin)) {
         	break;
         }
@@ -87,7 +87,7 @@ int main() {
     }
 
     if (house.hunter_count == 0) {
-        printf("No hunters? The ghost wins by default!\n");
+        printf("No hunters. The ghost wins\n");
         house_cleanup(&house);
         return 0;
     }
