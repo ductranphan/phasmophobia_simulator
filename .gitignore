@@ -2,5 +2,6 @@
 *.swp
 *.o
 simulation
+*.csv
 '''
 
